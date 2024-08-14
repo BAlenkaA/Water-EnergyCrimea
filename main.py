@@ -17,6 +17,10 @@ WATER_URL = 'https://voda.crimea.ru/maintenance'
 
 
 def check_water_and_send(day):
+    """
+    Checks if there are new messages that meet the conditions on the WATER_URL.
+    If there is a message, it is sent to the telegram.
+    """
     response = requests.get('https://voda.crimea.ru/maintenance')
     soup = BeautifulSoup(response.text, 'html.parser')
     if soup.find(string=re.compile('^%s\\s...' % day)) is not None:
@@ -30,6 +34,9 @@ def check_water_and_send(day):
 
 
 def get_url_energy():
+    """
+    Checks if there are new messages that satisfy the conditions on the ENERGY_URL.
+    """
     relative_link = '/consumers/cserv/classifieds'
     response = requests.get(urljoin(ENERGY_URL, relative_link))
     soup_energy = BeautifulSoup(response.text, 'lxml')
@@ -43,12 +50,15 @@ def get_url_energy():
         h5_item = section.find('h5')
 
         if (date_post == current_date
-                and 'симферопол' in h5_item.text.strip().lower()):
+                and 'симферополю' in h5_item.text.strip().lower()):
             a_href = h5_item.find('a')
             return urljoin(ENERGY_URL, a_href['href'])
 
 
 def send_energy_message(link):
+    """
+    Sends a message to telegram if the link is not None.
+    """
     if link is not None:
         response = requests.get(link)
         soup = BeautifulSoup(response.text, features='lxml')
