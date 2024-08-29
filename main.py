@@ -2,15 +2,15 @@ import datetime
 import logging
 import os
 import re
-import requests_cache
 from urllib.parse import urljoin
 
 import requests
+import requests_cache
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
 from configs import configure_logging
-from exceptions import get_response, find_tag, ParserFindTagException
+from exceptions import ParserFindTagException, find_tag, get_response
 
 load_dotenv()
 
@@ -23,8 +23,8 @@ WATER_URL = 'https://voda.crimea.ru/maintenancegaerga'
 
 def check_water_and_send(day, session):
     """
-    Checks if there are new messages that meet the conditions on the WATER_URL.
-    If there is a message, it is sent to the telegram.
+    Проверяет, есть ли новые сообщения, удовлетворяющие условиям на WATER_URL.
+    Если сообщение есть, оно отправляется в телеграмм.
     """
     response = get_response(WATER_URL, session)
     if response is None:
@@ -38,12 +38,13 @@ def check_water_and_send(day, session):
                 print(requests.get(
                     f"https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id="
                     f"{CHANNEL_ID}&text={link.text + sibling.text}").json())
-                logging.info(f'Сообщение {link.text + sibling.text} было отправлено в чат')
+                logging.info(f'Сообщение {link.text + sibling.text} '
+                             f'было отправлено в чат')
 
 
 def get_url_energy(session):
     """
-    Checks if there are new messages that satisfy the conditions on the ENERGY_URL.
+    Проверяет, есть ли новые сообщения, удовлетворяющие условиям на ENERGY_URL.
     """
     relative_link = '/consumers/cserv/classifieds'
     energy_url = urljoin(ENERGY_URL, relative_link)
@@ -63,14 +64,15 @@ def get_url_energy(session):
         if (date_post == current_date
                 and 'симферополю' in h5_item.text.strip().lower()):
             a_href = find_tag(h5_item, 'a')
-            logging.info(f'Ссылка на страницу, соответствующую критериям поиска, получена')
+            logging.info(
+                'Ссылка на страницу, соответствующую критериям, получена')
             return urljoin(ENERGY_URL, a_href['href'])
-    logging.info(f'Нет страниц, соответствующих критериям поиска')
+    logging.info('Нет страниц, соответствующих критериям поиска')
 
 
 def send_energy_message(link, session):
     """
-    Sends a message to telegram if the link is not None.
+    Отправляет сообщение в телеграмм, если ссылка не None.
     """
     if link is not None:
         response = get_response(link, session)
@@ -85,7 +87,8 @@ def send_energy_message(link, session):
             f"https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id="
             f"{CHANNEL_ID}&text="
             f"Электроэнергия:\n\n{text}\n{downloads_link}").json())
-        logging.info(f'Сообщение с ссылкой {downloads_link} было отправлено в чат')
+        logging.info(
+            f'Сообщение с ссылкой {downloads_link} было отправлено в чат')
 
 
 def main():
@@ -99,8 +102,8 @@ def main():
 
         check_water_and_send(datetime.date.today().strftime('%d'), session)
         check_water_and_send((datetime.datetime.today()
-                          + datetime.timedelta(days=1)
-                          ).strftime('%d'), session)
+                              + datetime.timedelta(days=1)
+                              ).strftime('%d'), session)
         link = get_url_energy(session)
         send_energy_message(link, session)
     except ParserFindTagException as e:
