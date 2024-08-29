@@ -1,11 +1,16 @@
 import datetime
+import logging
 import os
 import re
+import requests_cache
 from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
+
+from configs import configure_logging
+from exceptions import get_response, find_tag, ParserFindTagException
 
 load_dotenv()
 
@@ -13,15 +18,17 @@ TOKEN = os.getenv('TELTOK')
 CHANNEL_ID = os.getenv('TEL_CHEL')
 
 ENERGY_URL = 'https://crimea-energy.ru'
-WATER_URL = 'https://voda.crimea.ru/maintenance'
+WATER_URL = 'https://voda.crimea.ru/maintenancegaerga'
 
 
-def check_water_and_send(day):
+def check_water_and_send(day, session):
     """
     Checks if there are new messages that meet the conditions on the WATER_URL.
     If there is a message, it is sent to the telegram.
     """
-    response = requests.get('https://voda.crimea.ru/maintenance')
+    response = get_response(WATER_URL, session)
+    if response is None:
+        return
     soup = BeautifulSoup(response.text, 'html.parser')
     if soup.find(string=re.compile('^%s\\s...' % day)) is not None:
         link = soup.find(string=re.compile('^%s\\s...' % day)).parent
@@ -31,53 +38,76 @@ def check_water_and_send(day):
                 print(requests.get(
                     f"https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id="
                     f"{CHANNEL_ID}&text={link.text + sibling.text}").json())
+                logging.info(f'Сообщение {link.text + sibling.text} было отправлено в чат')
 
 
-def get_url_energy():
+def get_url_energy(session):
     """
     Checks if there are new messages that satisfy the conditions on the ENERGY_URL.
     """
     relative_link = '/consumers/cserv/classifieds'
-    response = requests.get(urljoin(ENERGY_URL, relative_link))
+    energy_url = urljoin(ENERGY_URL, relative_link)
+    response = get_response(energy_url, session)
+    if response is None:
+        return
     soup_energy = BeautifulSoup(response.text, 'lxml')
     current_date = datetime.datetime.now().date()
     section_items = soup_energy.find_all(
         'div', class_=re.compile(r'^items-row cols-1'))
     for section in section_items:
-        span_item = section.find('span')
+        span_item = find_tag(section, 'span')
         date_post = datetime.datetime.strptime(
             span_item.text.strip()[:10], "%d/%m/%Y").date()
-        h5_item = section.find('h5')
+        h5_item = find_tag(section, 'h5')
 
         if (date_post == current_date
                 and 'симферополю' in h5_item.text.strip().lower()):
-            a_href = h5_item.find('a')
+            a_href = find_tag(h5_item, 'a')
+            logging.info(f'Ссылка на страницу, соответствующую критериям поиска, получена')
             return urljoin(ENERGY_URL, a_href['href'])
+    logging.info(f'Нет страниц, соответствующих критериям поиска')
 
 
-def send_energy_message(link):
+def send_energy_message(link, session):
     """
     Sends a message to telegram if the link is not None.
     """
     if link is not None:
-        response = requests.get(link)
+        response = get_response(link, session)
         soup = BeautifulSoup(response.text, features='lxml')
-        doc_a_tag = soup.find('a', attrs={'href': re.compile(r'\.doc$')})
+        doc_a_tag = find_tag(soup, 'a', attrs={'href': re.compile(r'\.doc$')})
         href = doc_a_tag['href']
         downloads_link = urljoin(ENERGY_URL, href)
-        section_div = soup.find('div', attrs={'itemprop': 'articleBody'})
-        p_item = section_div.find('p')
+        section_div = find_tag(soup, 'div', attrs={'itemprop': 'articleBody'})
+        p_item = find_tag(section_div, 'p')
         text = p_item.text
         print(requests.get(
             f"https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id="
             f"{CHANNEL_ID}&text="
             f"Электроэнергия:\n\n{text}\n{downloads_link}").json())
+        logging.info(f'Сообщение с ссылкой {downloads_link} было отправлено в чат')
+
+
+def main():
+    configure_logging()
+    logging.info('Парсер запущен!')
+
+    session = requests_cache.CachedSession()
+    session.cache.clear()
+
+    try:
+
+        check_water_and_send(datetime.date.today().strftime('%d'), session)
+        check_water_and_send((datetime.datetime.today()
+                          + datetime.timedelta(days=1)
+                          ).strftime('%d'), session)
+        link = get_url_energy(session)
+        send_energy_message(link, session)
+    except ParserFindTagException as e:
+        logging.error(f'Ошибка при выполнении парсинга: {e}')
+    except Exception as e:
+        logging.exception(f'Произошла ошибка: {e}', stack_info=True)
 
 
 if __name__ == "__main__":
-    check_water_and_send(datetime.date.today().strftime('%d'))
-    check_water_and_send((datetime.datetime.today()
-                          + datetime.timedelta(days=1)
-                          ).strftime('%d'))
-    link = get_url_energy()
-    send_energy_message(link)
+    main()
