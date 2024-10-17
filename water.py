@@ -1,8 +1,6 @@
-import logging
 import os
 import re
 
-import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
@@ -16,7 +14,7 @@ CHANNEL_ID = os.getenv('TEL_CHEL')
 WATER_URL = 'https://voda.crimea.ru/maintenance'
 
 
-def check_water_and_send(day, session):
+def check_water_maintenance(day, session):
     """
     Проверяет, есть ли новые сообщения, удовлетворяющие условиям на WATER_URL.
     Если сообщение есть, оно отправляется в телеграмм.
@@ -25,13 +23,16 @@ def check_water_and_send(day, session):
     if response is None:
         return
     soup = BeautifulSoup(response.text, 'html.parser')
-    if soup.find(string=re.compile('^%s\\s...' % day)) is not None:
-        link = soup.find(string=re.compile('^%s\\s...' % day)).parent
+    date_element = soup.find(string=re.compile('^%s\\s...' % day))
+    if date_element:
+        link = date_element.parent
         for sibling in link.next_siblings:
-            if ('гридасова' in sibling.text.lower()
-                    or 'белое' in sibling.text.lower()):
-                print(requests.get(
-                    f"https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id="
-                    f"{CHANNEL_ID}&text={link.text + sibling.text}").json())
-                logging.info(f'Сообщение {link.text + sibling.text} '
-                             f'было отправлено в чат')
+            if sibling and hasattr(sibling, 'text'):
+                if 'симфе' in sibling.text.lower():
+                    next_sibling = sibling.next_sibling
+
+                    if next_sibling and hasattr(next_sibling, 'text'):
+                        if 'белое' in next_sibling.text.lower() or 'гридасова' in next_sibling.text.lower():
+                            messages = f"{sibling.text} не будет воды {next_sibling.text}"
+                            return messages
+    return None
