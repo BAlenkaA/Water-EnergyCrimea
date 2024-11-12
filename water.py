@@ -1,20 +1,14 @@
-import os
 import re
 
 from bs4 import BeautifulSoup
-from dotenv import load_dotenv
 
 from exceptions import get_response
 
-load_dotenv()
-
-TOKEN = os.getenv('TELTOK')
-CHANNEL_ID = os.getenv('TEL_CHEL')
 
 WATER_URL = 'https://voda.crimea.ru/maintenance'
 
 
-def check_water_maintenance(day, session):
+def check_water_repair_work(day, session):
     """
     Проверяет, есть ли новые сообщения, удовлетворяющие условиям на WATER_URL.
     Если сообщение есть, оно отправляется в телеграмм.
