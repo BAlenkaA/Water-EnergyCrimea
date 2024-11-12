@@ -33,7 +33,7 @@ def get_url_energy(day, session):
             span_item.text.strip()[:10], "%d/%m/%Y").strftime("%d/%m/%Y")
         h5_item = find_tag(section, 'h5')
         if (date_post == current_date
-                and 'симферо' in h5_item.text.strip().lower()):
+                and 'симфероль' in h5_item.text.strip().lower()):
             a_href = find_tag(h5_item, 'a')
             link = urljoin(ENERGY_URL, a_href['href'])
             logging.info(
@@ -144,8 +144,10 @@ def check_energy_repair_work(day, session):
                 for data in [data_today, data_tomorrow]:
                     if data:
                         messages.extend(data)
-                output_message = '\n\n'.join([f"{item[0]}\n{item[1].replace(';', ';\n')}" for item in messages])
-                return f'Внимание, отключение электричества: {output_message}'
+                if messages:
+                    output_message = '\n\n'.join([f"{item[0]}\n{item[1].replace(';', ';\n')}" for item in messages])
+                    return f'Внимание, отключение электричества: {output_message}'
+                return None
             else:
                 logging.error("Ошибка: конвертация .doc в .docx не удалась.")
         else:
